@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,7 +76,7 @@ td {
 		fmt.Fprintln(w, "</head>")
 
 		fmt.Fprint(w, "<body style=\"color:white;background:black\">\n")
-		fmt.Fprintf(w, "<h3 style=\"color:yellow\">%s</h3>\n", fpath + filterTitle(*filter))
+		fmt.Fprintf(w, "<h3 style=\"color:yellow\">%s</h3>\n", fpath+filterTitle(*filter))
 
 		fmt.Fprintln(w, "<table>")
 		fmt.Fprintln(w, "<tr><th>Name</th><th>Date</th></tr>")
@@ -87,9 +88,20 @@ td {
 	})
 
 	http.HandleFunc("/content/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Query().Get("path")
-		log.Printf("request: %s", path)
-		data, err := os.ReadFile(path)
+		idStr := r.URL.Query().Get("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if id > len(entries) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		pathInfo := entries[id]
+		log.Printf("request: %s", pathInfo.path)
+		data, err := os.ReadFile(pathInfo.path)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -150,17 +162,17 @@ func retrieveFiles(root string, mode string, filter string) []entry_info {
 
 func populatePage(entries []entry_info) string {
 	var w strings.Builder
-	for _, e := range entries {
-		w.WriteString(entry(e.path, e.name, e.date.Format("2006-01-02 15:04:05")))
+	for idx, e := range entries {
+		w.WriteString(entry(int64(idx), e.name, e.date.Format("2006-01-02 15:04:05")))
 		w.WriteString("\n")
 	}
 
 	return w.String()
 }
 
-func entry(filePath string, name string, date string) string {
+func entry(idx int64, name string, date string) string {
 	params := url.Values{}
-	params.Add("path", filePath)
+	params.Add("id", strconv.FormatInt(idx, 10))
 	e := fmt.Sprintf("<tr><td><a href=\"/content/?%s\">%s</a></td>", params.Encode(), name)
 	e += fmt.Sprintf("<td>%s</td></tr>", date)
 	return e
